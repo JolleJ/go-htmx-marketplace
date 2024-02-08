@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strconv"
 	"time"
 
 	"github.com/google/uuid"
@@ -111,6 +112,7 @@ func (i ItemModel) InitializeItems(c echo.Context) error {
 	return c.JSON(http.StatusOK, "item")
 }
 
+// Returns all items
 func (i ItemModel) ListItems() ([]Item, error) {
 
 	var items []Item
@@ -133,4 +135,56 @@ func (i ItemModel) ListItems() ([]Item, error) {
 	}
 
 	return items, nil
+}
+
+// Returns all items given the pagination settings
+// input: page int
+// input: numberOfItems int, How many items to return
+func (i ItemModel) ListItemsPagination(c echo.Context) error {
+
+	var acceptedParams = map[string]string{
+		"page":          "Current request page",
+		"numberOfItems": "How many items the page should include in the output",
+	}
+
+	for param := range c.QueryParams() {
+		if _, ok := acceptedParams[param]; !ok {
+			return c.JSON(http.StatusBadRequest, fmt.Sprintf("Invalid query parameter: %s", param))
+		}
+	}
+
+	// Retrieve query parameters
+	page := c.QueryParam("page")
+	numberOfItems := c.QueryParam("numberOfItems")
+
+	pageInt, err := strconv.Atoi(page)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, "page has to be a number")
+	}
+
+	numberOfItemsInt, err := strconv.Atoi(numberOfItems)
+	if err != nil {
+		return c.JSON(http.StatusBadRequest, "numberOfItems has to be a number")
+	}
+
+	var items []Item
+	offset := (pageInt - 1) * numberOfItemsInt
+	rows, err := i.Conn.Query(context.Background(), fmt.Sprintf("select id, item_name, description from items LIMIT %d OFFSET %d", numberOfItemsInt-1, offset))
+	if err != nil {
+		log.Fatal("Select query failed", err.Error())
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var item Item
+		rows.Scan(&item.Id, &item.Name, &item.Description)
+		items = append(items, item)
+	}
+
+	if err = rows.Err(); err != nil {
+		return c.JSON(http.StatusInternalServerError, err)
+	}
+
+	return c.JSON(http.StatusOK, items)
 }
