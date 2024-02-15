@@ -28,31 +28,42 @@ type Item struct {
 	Description    sql.NullString `form:"description" json:"description"`
 	Price          float64        `json:"price"`
 	CurrentBid     float64        `json:"bid"`
-	CurrentBidder  float64        `json:"bidder"`
+	CurrentBidder  string         `json:"bidder"`
 	BiddingEndDate time.Time      `json:"biddingEndDate"`
 	Category       string         `json:"category"`
 }
 
 type ItemBidData struct {
-	Id     uuid.UUID `form:"id" json:"id"`
+	Id     uuid.UUID `json:"id"`
 	Bid    float64   `json:"bid"`
-	Bidder float64   `json:"bidder"`
+	Bidder string    `json:"bidder"`
 }
 
 func (i ItemModel) BidOnItem(c echo.Context) error {
 
-	var itemBidDate ItemBidData
-	err := c.Bind(&itemBidDate)
+	var itemBidData ItemBidData
+	err := c.Bind(&itemBidData)
 	if err != nil {
 		log.Fatal("Could not bind request data")
 		return c.JSON(http.StatusBadRequest, c.Request().Body)
 	}
 
-	err = i.Conn.QueryRow(context.Background(), "update items set current_bid = $1, current_bidder = $2 where id = $3").Scan("", "", "")
+	uuid, err := uuid.Parse(c.Param("id"))
 	if err != nil {
-		log.Fatal("Error updating bidding data")
+		log.Fatal("Could not bind parameters", err.Error())
 	}
-	return c.JSON(http.StatusCreated, "")
+
+	if err != nil {
+		log.Fatal("Could not bind parameters", err.Error())
+	}
+
+	_, err = i.Conn.Exec(context.Background(), "update items set current_bid = $1, current_bidder = $2 where id = $3", itemBidData.Bid, itemBidData.Bidder, uuid)
+	if err != nil {
+		log.Fatal("Error updating bidding data: ", err)
+	}
+
+	itemBidData.Id = uuid
+	return c.JSON(http.StatusOK, itemBidData)
 }
 
 func (i ItemModel) GetItem(c echo.Context) error {
@@ -117,7 +128,7 @@ func (i ItemModel) ListItems() ([]Item, error) {
 
 	var items []Item
 
-	rows, err := i.Conn.Query(context.Background(), "select id, item_name, description from items")
+	rows, err := i.Conn.Query(context.Background(), "select id, item_name, description, current_bid, current_bidder from items")
 	if err != nil {
 		log.Fatal("Select query failed", err.Error())
 		return nil, err
@@ -126,7 +137,7 @@ func (i ItemModel) ListItems() ([]Item, error) {
 
 	for rows.Next() {
 		var item Item
-		rows.Scan(&item.Id, &item.Name, &item.Description)
+		rows.Scan(&item.Id, &item.Name, &item.Description, &item.CurrentBid, &item.CurrentBidder)
 		items = append(items, item)
 	}
 
@@ -169,7 +180,7 @@ func (i ItemModel) ListItemsPagination(c echo.Context) error {
 
 	var items []Item
 	offset := (pageInt - 1) * numberOfItemsInt
-	rows, err := i.Conn.Query(context.Background(), fmt.Sprintf("select id, item_name, description from items LIMIT %d OFFSET %d", numberOfItemsInt-1, offset))
+	rows, err := i.Conn.Query(context.Background(), fmt.Sprintf("select id, item_name, description, current_bid, current_bidder from items LIMIT %d OFFSET %d", numberOfItemsInt, offset))
 	if err != nil {
 		log.Fatal("Select query failed", err.Error())
 		return c.JSON(http.StatusInternalServerError, err)
@@ -178,7 +189,7 @@ func (i ItemModel) ListItemsPagination(c echo.Context) error {
 
 	for rows.Next() {
 		var item Item
-		rows.Scan(&item.Id, &item.Name, &item.Description)
+		rows.Scan(&item.Id, &item.Name, &item.Description, &item.CurrentBid, &item.CurrentBidder)
 		items = append(items, item)
 	}
 

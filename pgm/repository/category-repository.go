@@ -12,10 +12,6 @@ type CategoryModel struct {
 	Conn *pgx.Conn
 }
 
-type CategoriesListPage struct {
-	Categories []Category
-}
-
 type Category struct {
 	Id          uuid.UUID `json:"id"`
 	Description string    `json:"description"`

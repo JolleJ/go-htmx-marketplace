@@ -43,8 +43,9 @@ func main() {
 	//   - page: Current request page
 	//   - numberOfItems: How many items the page should include in the output
 	e.GET("/items", env.items.ListItemsPagination)
-
 	e.GET("/items/:id", env.items.GetItem)
+	e.POST("/items/:id/bid", env.items.BidOnItem)
 
 	e.Logger.Fatal(e.Start(":1323"))
+
 }
